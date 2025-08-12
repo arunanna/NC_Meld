@@ -3,24 +3,17 @@ import nibabel as nb
 import pandas as pd
 import os
 import h5py
+from meld_graph.utils.nib_utils import load_f32
 
 def load_mgh(filename):
-    """ import mgh file using nibabel. returns flattened data array"""
-    mgh_file=nb.load(filename)
-    # mmap_data=mgh_file.get_data()
-    mmap_data = mgh_file.get_fdata().astype(np.float32, copy=False)
-    array_data=np.ndarray.flatten(mmap_data)
-    return array_data;
-
+    """Import MGH file using nibabel. Returns flattened float32 data array."""
+    _, arr = load_f32(filename)  # arr is already float32
+    return arr.ravel()           # ravel() is faster & avoids extra copy
 
 def import_mgh(filename):
-    """ import mgh file using nibabel. returns flattened data array"""
-    mgh_file=nb.load(filename)
-    # mmap_data=mgh_file.get_data()
-    mmap_data = mgh_file.get_fdata().astype(np.float32, copy=False)
-    array_data=np.ndarray.flatten(mmap_data)
-    return array_data;
-
+    """Import MGH file using nibabel. Returns flattened float32 data array."""
+    _, arr = load_f32(filename)
+    return arr.ravel()
 def save_mgh(filename,array, demo):
     """ save mgh file using nibabel and imported demo mgh file"""
     # mmap=np.memmap('/tmp/tmp', dtype='float32', mode='w+', shape=demo.get_data().shape)

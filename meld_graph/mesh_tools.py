@@ -7,6 +7,7 @@ import os
 import potpourri3d as pp3d
 from meld_graph.paths import BASE_PATH, MELD_PARAMS_PATH
 import matplotlib.pyplot as plt
+from meld_graph.utils.nib_utils import load_f32
 
 # import paths as paths
 def find_nearest_multi(array, value):
@@ -185,7 +186,8 @@ def load_mesh_data(surf_data, gii_darray=0):
     if isinstance(surf_data, str):
         if surf_data.endswith("nii") or surf_data.endswith("nii.gz") or surf_data.endswith("mgz"):
             # data = np.squeeze(nb.load(surf_data).get_data())
-            data = np.squeeze(nb.load(surf_data).get_fdata()).astype(np.float32, copy=False)
+            _, data = load_f32(surf_data)
+            data = np.squeeze(data)
         elif (
             surf_data.endswith("curv")
             or surf_data.endswith("sulc")
