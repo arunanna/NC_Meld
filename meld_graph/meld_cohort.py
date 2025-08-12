@@ -411,8 +411,25 @@ class MeldSubject:
 
     @property
     def site_code(self):
-        site_code = self.get_demographic_features('Harmo code')
-        return site_code
+        """Return site code; default to 'noHarmo' if missing/blank/NaN."""
+        try:
+            val = self.get_demographic_features('Harmo code')
+        except Exception:
+            val = None
+
+        # normalize & guard
+        if val is None:
+            return 'noHarmo'
+        if isinstance(val, float):
+            try:
+                if math.isnan(val):
+                    return 'noHarmo'
+            except Exception:
+                pass
+        if isinstance(val, str):
+            v = val.strip()
+            return v if v else 'noHarmo'
+        return str(val)
 
     def surf_dir_path(self, hemi):
         """return path to features dir (surf_dir)"""
