@@ -100,7 +100,8 @@ def smooth_array(input_array, neighbours, n_iter=70, cortex_mask=None):
 def save_mgh(filename, array, demo):
     """save mgh file using nibabel and imported demo mgh file"""
     rand_int = np.random.randint(100)
-    mmap = np.memmap("/tmp/tmp" + str(rand_int), dtype="float32", mode="w+", shape=demo.get_data().shape)
+    # mmap = np.memmap("/tmp/tmp" + str(rand_int), dtype="float32", mode="w+", shape=demo.get_data().shape)
+    mmap = np.memmap("/tmp/tmp" + str(rand_int), dtype="float32", mode="w+", shape=demo.shape)
     mmap[:, 0, 0] = array[:]
     output = nb.MGHImage(mmap, demo.affine, demo.header)
     nb.save(output, filename)
@@ -135,7 +136,8 @@ def smoothing_fs(overlay, fwhm, subject="fsaverage_sym", hemi="lh", subjects_dir
 def load_mgh(filename):
     """import mgh file using nibabel. returns flattened data array"""
     mgh_file = nb.load(filename)
-    mmap_data = mgh_file.get_data()
+    # mmap_data = mgh_file.get_data()
+    mmap_data = mgh_file.get_fdata().astype(np.float32, copy=False)
     array_data = np.ndarray.flatten(mmap_data)
     return array_data
 
@@ -182,7 +184,8 @@ def load_mesh_data(surf_data, gii_darray=0):
     # if the input is a filename, load it
     if isinstance(surf_data, str):
         if surf_data.endswith("nii") or surf_data.endswith("nii.gz") or surf_data.endswith("mgz"):
-            data = np.squeeze(nb.load(surf_data).get_data())
+            # data = np.squeeze(nb.load(surf_data).get_data())
+            data = np.squeeze(nb.load(surf_data).get_fdata()).astype(np.float32, copy=False)
         elif (
             surf_data.endswith("curv")
             or surf_data.endswith("sulc")
