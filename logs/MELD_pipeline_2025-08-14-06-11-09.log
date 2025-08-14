@@ -1,0 +1,13 @@
+Namespace(id=None, list_ids='/Users/arunannamalai/Documents/Projects/MELD/MeldData/subjects_list.txt', harmo_code='noHarmo', fastsurfer=False, parallelise=False, demographic_file='/Users/arunannamalai/Documents/Projects/MELD/MeldData/demographics_file.csv', harmo_only=True, skip_feature_extraction=False, no_nifti=False, no_report=False, debug_mode=False)
+SCRIPT 1: Call script segmentation
+INFO: Run subjects one after another
+Traceback (most recent call last):
+  File "/Users/arunannamalai/Documents/Projects/NC_Meld/scripts/new_patient_pipeline/new_pt_pipeline.py", line 134, in <module>
+    result = run_script_segmentation(
+  File "/Users/arunannamalai/Documents/Projects/NC_Meld/scripts/new_patient_pipeline/run_script_segmentation.py", line 396, in run_script_segmentation
+    result = run_subject_segmentation(subj,  harmo_code = harmo_code, use_fastsurfer = use_fastsurfer, verbose=verbose)
+  File "/Users/arunannamalai/Documents/Projects/NC_Meld/scripts/new_patient_pipeline/run_script_segmentation.py", line 324, in run_subject_segmentation
+    os.makedirs(fs_folder, exist_ok=True)
+  File "/Users/arunannamalai/miniforge3/envs/meld_graph/lib/python3.9/os.py", line 225, in makedirs
+    mkdir(name, mode)
+FileNotFoundError: [Errno 2] No such file or directory: ''
