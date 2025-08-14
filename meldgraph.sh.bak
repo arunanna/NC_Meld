@@ -6,5 +6,5 @@ conda activate meld_graph
 if [ $1 = 'pytest' ]; then
   pytest ${@:2}
 else
-  "${CONDA_PREFIX:-/Users/arunannamalai/miniforge3/envs/meld_graph}/bin/python" scripts/new_patient_pipeline/$1 "${@:2}"
+  python scripts/new_patient_pipeline/$1 ${@:2}
 fi
