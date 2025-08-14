@@ -6,7 +6,6 @@
 
 ## To run : python run_script_segmentation.py -id <sub_id> -harmo_code <harmo_code>
 
-
 import os
 from tabnanny import verbose
 import numpy as np
@@ -152,14 +151,14 @@ def freesurfer_subject(subject, fs_folder, verbose=False):
     if subject_flair_path != None:
         print(get_m('Segmentation using T1 and FLAIR with Freesurfer', subject_id, 'STEP 1'))
         command = format(
-            "$FREESURFER_HOME/bin/recon-all -sd {} -s {} -i {} -FLAIR {} -FLAIRpial -all".format(
+            "$FREESURFER_HOME/bin/recon-all -sd {} -s {} -i {} -FLAIR {} -FLAIRpial -cw256 -all".format(
                 fs_folder, subject_id, subject_t1_path, subject_flair_path
             )
         )
     else:
         print(get_m('Segmentation using T1 only with Freesurfer', subject_id, 'STEP 1'))
         command = format(
-            "$FREESURFER_HOME/bin/recon-all -sd {} -s {} -i {} -all".format(fs_folder, subject_id, subject_t1_path)
+            "$FREESURFER_HOME/bin/recon-all -sd {} -s {} -i {} -cw256 -all".format(fs_folder, subject_id, subject_t1_path)
         )
 
     # call Freesurfer
