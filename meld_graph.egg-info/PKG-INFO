@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: meld_graph
+Version: 2.2.2
+Summary: Graph-based lesion segmentation for the MELD project.
+Author: MELD development team
+Author-email: meld.study@gmail.com
+Maintainer: MELD development team
+Maintainer-email: meld.study@gmail.com
+License: MIT
+Dynamic: author
+Dynamic: author-email
+Dynamic: license
+Dynamic: maintainer
+Dynamic: maintainer-email
+Dynamic: summary
