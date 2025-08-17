@@ -689,32 +689,32 @@ class MeldSubject:
             f"No suitable featurematrix files in {preproc_root} under {site_roots}"
         )
     
-    def load_feature_lesion_data(self, features, hemi="lh", features_to_ignore=[]):
+    def load_feature_lesion_data(self, features, hemi="lh", features_to_ignore=None):
         """
-        Load all patient's data into memory
-
-        Args:
-            features: list of features to be loaded
-            hemi: 'lh' or 'rh'
-            features_to_ignore: list of features that should be replaced with 0 upon loading
+        Load all patient's data into memory.
 
         Returns:
-            feature_data, label
-
+            feature_data (NVERT x NFEAT float32), lesion_values (NVERT int)
         """
-        # load all features
-        feature_values = []
-        for feature in features:
-            if feature in features_to_ignore:
-                # append zeros for features_to_ignore
-                feature_values.append(np.zeros(NVERT, dtype=np.float32))
+        if features_to_ignore is None:
+            features_to_ignore = []
+        # Load features; zero-out any listed in features_to_ignore
+        loaded = []
+        for feat in features:
+            arr = self.load_feature_values(feat, hemi=hemi)
+            if feat in features_to_ignore:
+                loaded.append(np.zeros_like(arr, dtype=np.float32))
             else:
-                # read feature_values
-                feature_values.append(self.load_feature_values(feature, hemi=hemi))
-        feature_values = np.stack(feature_values, axis=-1)
-        # load lesion data
-        lesion_values = np.ceil(self.load_feature_values(".on_lh.lesion.mgh", hemi=hemi)).astype(int)
-
+                loaded.append(arr.astype(np.float32, copy=False))
+        feature_values = np.stack(loaded, axis=-1)  # shape: (NVERT, NFEAT)
+        # Load lesion if present; otherwise use zeros (typical for test-time subjects)
+        try:
+            lesion_values = np.ceil(
+                self.load_feature_values(".on_lh.lesion.mgh", hemi=hemi)
+            ).astype(int)
+        except Exception:
+            # no manual mask available → create an all-zero mask of correct length
+            lesion_values = np.zeros(feature_values.shape[0], dtype=int)
         return feature_values, lesion_values
 
     def load_boundary_zone(self, max_distance=40, feat_name=".on_lh.boundary_zone.mgh"):
