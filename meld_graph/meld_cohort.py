@@ -456,7 +456,14 @@ class MeldSubject:
 
     @property
     def has_flair(self):
-        return "FLAIR" in " ".join(self.get_feature_list())
+        for hemi in ("lh", "rh"):
+            try:
+                feats = self.get_feature_list(hemi=hemi)
+                if any("FLAIR" in k for k in feats):
+                    return True
+            except Exception:
+                pass
+        return False
 
     def has_lesion(self):
         return self.get_lesion_hemisphere() in ["lh", "rh"]
@@ -476,6 +483,59 @@ class MeldSubject:
             if ".on_lh.lesion.mgh" in surf_dir_rh.keys():
                 return "rh"
         return None
+
+    def _open_subject_group(self, hemi="lh"):
+        """
+        Return (f, grp, h5_path) where grp is the subject's hemi group inside the HDF5.
+        Searches across MELD_noHarmo, MELD_<site>, MELD_H1, MELD_TEST and raw/smoothed files.
+        Caller must close f (we do it in get_feature_list).
+        """
+        base = os.environ.get("MELD_DATA_PATH")
+        if not base:
+            raise EnvironmentError("MELD_DATA_PATH is not set")
+        preproc_root = os.path.join(base, "output", "preprocessed_surf_data")
+
+        # Prefer current run’s site, but include noHarmo etc.
+        pref = f"MELD_{self.site_code}"
+        roots = []
+        for r in ("MELD_noHarmo", pref, "MELD_H1", "MELD_TEST"):
+            if r not in roots:
+                roots.append(r)
+
+        def h5_candidates(root):
+            d = os.path.join(preproc_root, root)
+            site = root.replace("MELD_", "")
+            return [
+                os.path.join(d, f"{site}_patient_featurematrix.hdf5"),
+                os.path.join(d, f"{site}_patient_featurematrix_smoothed.hdf5"),
+            ]
+
+        last_err = None
+        for root in roots:
+            for hp in h5_candidates(root):
+                if not os.path.exists(hp):
+                    continue
+                try:
+                    f = h5py.File(hp, "r")
+                    # try declared site group first, then any top-level group
+                    site_groups = [self.site_code] + [k for k in f.keys() if k != self.site_code]
+                    for site in site_groups:
+                        if site not in f:
+                            continue
+                        path = f[site].visit(self.find_path)
+                        if path is None:
+                            continue
+                        grp = f[os.path.join(site, path, hemi)]
+                        return f, grp, hp
+                    f.close()
+                except Exception as e:
+                    last_err = e
+                    try: f.close()
+                    except: pass
+                    continue
+        if last_err:
+            raise last_err
+        raise FileNotFoundError(f"Could not open subject group for {self.subject_id} (hemi={hemi})")
     
     def _resolve_featurematrix_path(self, prefer_smoothed=False):
         """
@@ -506,16 +566,20 @@ class MeldSubject:
         return len(missing_features) == 0
 
     def get_feature_list(self, hemi="lh"):
-        """Outputs a list of the features a participant has for each hemisphere"""
-        with self.cohort._site_hdf5(self.site_code, self.group) as f:
-            surf_dir_path = os.path.join(self.site_code, f[self.site_code].visit(self.find_path), hemi)
-            keys =  list(f[surf_dir_path].keys())
-            # remove lesion and boundaries from list of features
-            if ".on_lh.lesion.mgh" in keys:
-                keys.remove(".on_lh.lesion.mgh")
-            if ".on_lh.boundary_zone.mgh" in keys:
-                keys.remove(".on_lh.boundary_zone.mgh")
-        return keys
+        """Outputs a list of the features a participant has for each hemisphere."""
+        f, grp, _hp = self._open_subject_group(hemi=hemi)
+        try:
+            keys = list(grp.keys())
+            # remove lesion and boundary masks for the requested hemi
+            lesion_key   = f".on_{hemi}.lesion.mgh"
+            boundary_key = f".on_{hemi}.boundary_zone.mgh"
+            if lesion_key in keys:
+                keys.remove(lesion_key)
+            if boundary_key in keys:
+                keys.remove(boundary_key)
+            return keys
+        finally:
+            f.close()
 
     def get_demographic_features(
         self, feature_names, csv_file=DEMOGRAPHIC_FEATURES_FILE, normalize=False, default=None
