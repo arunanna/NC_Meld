@@ -434,11 +434,19 @@ class MeldSubject:
     def surf_dir_path(self, hemi):
         """return path to features dir (surf_dir)"""
         return os.path.join(self.site_code, self.scanner, self.group, self.subject_id, hemi)
-
+    
     def find_path(self, name):
-        """ Find the first object with the subject id in the hdf5"""
-        if self.subject_id in name:
-            return name    
+        """Find the first object with the subject id in the hdf5 (robust to 'sub-' prefix)."""
+        sid = self.subject_id
+        candidates = {sid}
+        if sid.startswith("sub-"):
+            candidates.add(sid[len("sub-"):])  # e.g., 'Imayasri'
+        else:
+            candidates.add("sub-" + sid)       # e.g., 'sub-Imayasri'
+
+        for cand in candidates:
+            if cand in name:
+                return name
     
     
     @property
@@ -467,6 +475,30 @@ class MeldSubject:
             if ".on_lh.lesion.mgh" in surf_dir_rh.keys():
                 return "rh"
         return None
+    
+    def _resolve_featurematrix_path(self, prefer_smoothed=False):
+        """
+        Return full path to the patient featurematrix HDF5 for this subject's site.
+        If prefer_smoothed=True, try the smoothed matrix first, then fall back.
+        """
+        base = os.environ.get("MELD_DATA_PATH")
+        if not base:
+            raise EnvironmentError("MELD_DATA_PATH is not set")
+
+        preproc_root = os.path.join(base, "output", "preprocessed_surf_data")
+        site_dir = os.path.join(preproc_root, f"MELD_{self.site_code}")
+
+        raw_f = os.path.join(site_dir, f"{self.site_code}_patient_featurematrix.hdf5")
+        sm_f  = os.path.join(site_dir, f"{self.site_code}_patient_featurematrix_smoothed.hdf5")
+
+        candidates = [sm_f, raw_f] if prefer_smoothed else [raw_f, sm_f]
+        for p in candidates:
+            if os.path.exists(p):
+                return p
+
+        raise FileNotFoundError(
+            f"Could not find featurematrix for site {self.site_code}. Tried: {candidates}"
+        )
 
     def has_features(self, features):
         missing_features = np.setdiff1d(features, self.get_feature_list())
@@ -571,18 +603,20 @@ class MeldSubject:
         return features
 
     def load_feature_values(self, feature, hemi="lh"):
-        """
-        Load and return values of specified feature.
-        """
-        feature_values = np.zeros(NVERT, dtype=np.float32)
-        # read data from hdf5
-        with self.cohort._site_hdf5(self.site_code, self.group) as f:
-            surf_dir = f[os.path.join(self.site_code, f[self.site_code].visit(self.find_path), hemi)]
-            if feature in surf_dir.keys():
-                feature_values[:] = surf_dir[feature][:]
-            else:
-                self.log.debug(f"missing feature: {feature} set to zero")
-        return feature_values
+        featurematrix_path = self._resolve_featurematrix_path(prefer_smoothed=False)
+        with h5py.File(featurematrix_path, "r") as f:
+            if self.site_code not in f:
+                raise KeyError(f"Site group '{self.site_code}' not found in {featurematrix_path}. Top-level: {list(f.keys())}")
+            path = f[self.site_code].visit(self.find_path)
+            if path is None:
+                raise FileNotFoundError(f"Could not locate subject '{self.subject_id}' under site '{self.site_code}' in {featurematrix_path}")
+            surf_dir = f[os.path.join(self.site_code, path, hemi)]
+            ds_name = f".on_{hemi}.{feature}"
+            if ds_name not in surf_dir:
+                available = list(surf_dir.keys())
+                raise KeyError(f"Feature dataset '{ds_name}' not found under {self.site_code}/{path}/{hemi}. Available (first 10): {available[:10]}")
+            vals = surf_dir[ds_name][()]
+        return vals
 
     def load_feature_lesion_data(self, features, hemi="lh", features_to_ignore=[]):
         """
