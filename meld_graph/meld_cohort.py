@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 import nibabel as nb
 import os
+import re
 import h5py
 import sys
 import glob
@@ -602,22 +603,92 @@ class MeldSubject:
             return features[0]
         return features
 
+    
     def load_feature_values(self, feature, hemi="lh"):
-        featurematrix_path = self._resolve_featurematrix_path(prefer_smoothed=False)
-        with h5py.File(featurematrix_path, "r") as f:
-            if self.site_code not in f:
-                raise KeyError(f"Site group '{self.site_code}' not found in {featurematrix_path}. Top-level: {list(f.keys())}")
-            path = f[self.site_code].visit(self.find_path)
-            if path is None:
-                raise FileNotFoundError(f"Could not locate subject '{self.subject_id}' under site '{self.site_code}' in {featurematrix_path}")
-            surf_dir = f[os.path.join(self.site_code, path, hemi)]
-            ds_name = f".on_{hemi}.{feature}"
-            if ds_name not in surf_dir:
-                available = list(surf_dir.keys())
-                raise KeyError(f"Feature dataset '{ds_name}' not found under {self.site_code}/{path}/{hemi}. Available (first 10): {available[:10]}")
-            vals = surf_dir[ds_name][()]
-        return vals
+        # --- Clean/normalise requested dataset name ---
+        # remove tokens like combat., inter_z., intra_z., asym. wherever they appear
+        feature_clean = feature
+        for tok in ("combat", "inter_z", "intra_z", "asym"):
+            feature_clean = re.sub(rf"(^|\.){tok}\.", r"\1", feature_clean)
 
+        # ensure a single .on_<hemi>. prefix (avoid doubles and wrong hemi)
+        if feature_clean.startswith(".on_"):
+            ds_name = re.sub(r"^\.on_(lh|rh)\.", f".on_{hemi}.", feature_clean)
+        else:
+            ds_name = f".on_{hemi}.{feature_clean.lstrip('.')}"
+        # collapse any accidental double .on_ from upstream strings
+        ds_name = re.sub(r"\.on_(lh|rh)\.\.on_(lh|rh)\.", f".on_{hemi}.", ds_name)
+        # ------------------------------------------------
+
+        base = os.environ.get("MELD_DATA_PATH")
+        if not base:
+            raise EnvironmentError("MELD_DATA_PATH is not set")
+        preproc_root = os.path.join(base, "output", "preprocessed_surf_data")
+
+        # Prefer the current run’s site first: if user ran noHarmo, try that first
+        preferred_root = f"MELD_{self.site_code}"  # e.g. MELD_H1 or MELD_noHarmo
+        site_roots = [preferred_root]
+        for alt in ("MELD_noHarmo", "MELD_H1", "MELD_TEST"):
+            if alt not in site_roots:
+                site_roots.append(alt)
+
+        def h5_candidates(root):
+            dirp = os.path.join(preproc_root, root)
+            site = root.replace("MELD_", "")
+            return [
+                os.path.join(dirp, f"{site}_patient_featurematrix.hdf5"),
+                os.path.join(dirp, f"{site}_patient_featurematrix_smoothed.hdf5"),
+            ]
+
+        def try_read(h5_path, ds_name):
+            with h5py.File(h5_path, "r") as f:
+                # try declared site group first, then any others
+                site_groups = [self.site_code] + [k for k in f.keys() if k != self.site_code]
+                last_err = None
+                for site in site_groups:
+                    if site not in f:
+                        continue
+                    path = f[site].visit(self.find_path)
+                    if path is None:
+                        continue
+                    grp = f[os.path.join(site, path, hemi)]
+                    # exact key
+                    if ds_name in grp:
+                        return grp[ds_name][()]
+                    # suffix fallback (handles weird hemi prefixes)
+                    want_suffix = re.sub(r"^\.on_(lh|rh)\.", "", ds_name)
+                    candidates = [k for k in grp.keys() if k.endswith(want_suffix)]
+                    if candidates:
+                        prefer = [k for k in candidates if f".on_{hemi}." in k]
+                        key = prefer[0] if prefer else sorted(candidates)[0]
+                        return grp[key][()]
+                    last_err = KeyError(
+                        f"Dataset '{ds_name}' not under {site}/{path}/{hemi} in {h5_path}. "
+                        f"Available (first 10): {list(grp.keys())[:10]}"
+                    )
+                if last_err:
+                    raise last_err
+                raise FileNotFoundError(
+                    f"Could not locate subject '{self.subject_id}' in any site group of {h5_path}"
+                )
+
+        last_err = None
+        for root in site_roots:
+            for h5_path in h5_candidates(root):
+                if not os.path.exists(h5_path):
+                    continue
+                try:
+                    return try_read(h5_path, ds_name)
+                except (KeyError, FileNotFoundError) as e:
+                    last_err = e
+                    continue
+
+        if last_err:
+            raise last_err
+        raise FileNotFoundError(
+            f"No suitable featurematrix files in {preproc_root} under {site_roots}"
+        )
+    
     def load_feature_lesion_data(self, features, hemi="lh", features_to_ignore=[]):
         """
         Load all patient's data into memory
