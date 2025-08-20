@@ -31,6 +31,7 @@ from scripts.data_preparation.extract_features.create_training_data_hdf5 import 
 from scripts.data_preparation.extract_features.sample_FLAIR_smooth_features import sample_flair_smooth_features
 from scripts.data_preparation.extract_features.lesion_labels import lesion_labels
 from scripts.data_preparation.extract_features.move_to_xhemi_flip import move_to_xhemi_flip
+from datetime import datetime
 
 
 def init(lock):
@@ -163,7 +164,8 @@ def freesurfer_subject(subject, fs_folder, verbose=False):
         )
 
     # call Freesurfer
-    print(get_m('Start cortical parcellation (up to 6h). Please wait', subject_id, 'INFO'))
+    print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
+      f"{get_m('Start cortical parcellation (up to 6h). Please wait', subject_id, 'INFO')}")
     print(get_m(f'Results will be stored in {fs_folder}', subject_id, 'INFO'))
     starting.acquire()  # no other process can get it until it is released
     proc = Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8')
